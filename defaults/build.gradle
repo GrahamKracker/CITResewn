@@ -64,16 +64,6 @@ if (stonecutter.current().isActiveVersion()) {
 
     plugins.apply 'com.modrinth.minotaur'
 
-    modrinth {
-        token = TOKEN_MODRINTH
-        projectId = property('publish.modrinth.defaults.id')
-        uploadFile = remapJar
-        versionNumber = version
-        versionName = "v" + version
-        additionalFiles = [sourcesJar.outputs.getFiles().singleFile]
-        gameVersions = Arrays.asList(property('publish.target-mc').split(","))
-    }
-
     rootProject.tasks.named('publishActive') {
         Task remapJarTask = tasks.getByName 'remapJar'
         Task modrinthTask = tasks.getByName 'modrinth'

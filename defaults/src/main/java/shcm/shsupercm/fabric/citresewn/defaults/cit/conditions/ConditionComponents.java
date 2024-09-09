@@ -2,6 +2,7 @@ package shcm.shsupercm.fabric.citresewn.defaults.cit.conditions;
 
 import io.shcm.shsupercm.fabric.fletchingtable.api.Entrypoint;
 /*?>=1.21 {?*/
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.component.ComponentType;
 /*?}?*/
 import net.minecraft.nbt.NbtElement;
@@ -17,6 +18,14 @@ import shcm.shsupercm.fabric.citresewn.pack.format.PropertyGroup;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyKey;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyValue;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
 public class ConditionComponents extends CITCondition {
     /*?>=1.21 {?*/@Entrypoint(CITConditionContainer.ENTRYPOINT)/*?}?*/
     public static final CITConditionContainer<ConditionComponents> CONTAINER = new CITConditionContainer<>(ConditionComponents.class, ConditionComponents::new,
@@ -28,18 +37,101 @@ public class ConditionComponents extends CITCondition {
 
     private ConditionNBT fallbackNBTCheck;
 
+    private static final Map<String, String> NBTToComponent = new HashMap<>(){};
+
+    private static long fileUpdateTime = 0;
+
+    //<editor-fold desc="ReloadNBTToComponent">
+    @SuppressWarnings("CallToPrintStackTrace")
+    private static void ReloadNBTToComponent()
+    {
+        //update file waits at least 15 seconds before updating
+        if (System.currentTimeMillis() < fileUpdateTime + 15000)
+        {
+            return;
+        }
+        CITResewn.info("Reloading NBTToComponent");
+
+        fileUpdateTime = System.currentTimeMillis();
+
+        NBTToComponent.clear();
+
+        BufferedReader br = null;
+
+        try {
+
+            // create file object
+            File file = Paths.get(FabricLoader.getInstance().getConfigDir().toString(), "citresewn", "nbttocomponents.properties").toFile();
+
+            //create file if it doesn't exist
+            if (!file.exists())
+            {
+                try {
+                    file.getParentFile().mkdirs();
+                    file.createNewFile();
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
+                }
+                return; // guaranteed to be empty
+            }
+
+            // create BufferedReader object from the File
+            br = new BufferedReader(new FileReader(file));
+
+            String line;
+
+            // read file line by line
+            while ((line = br.readLine()) != null) {
+
+                // split the line by :
+                String[] parts = line.split(",");
+
+                // first part is name, second is number
+                String key = parts[0].trim();
+                String value = parts[1].trim();
+
+                CITResewn.info("key: " + key);
+                CITResewn.info("value: " + value);
+
+                if (!key.isEmpty() && !value.isEmpty())
+                    NBTToComponent.put(key, value);
+            }
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+        finally {
+
+            // Always close the BufferedReader
+            if (br != null) {
+                try {
+                    br.close();
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+    //</editor-fold>
+
     @Override
     public void load(PropertyKey key, PropertyValue value, PropertyGroup properties) throws CITParsingException {
+        ReloadNBTToComponent();
         String metadata = value.keyMetadata();
         if (key.path().equals("nbt")) {
-            if (metadata.startsWith("display.Name")) {
-                metadata = "minecraft:custom_name" + value.keyMetadata().substring("display.Name".length());
-                CITResewn.logWarnLoading(properties.messageWithDescriptorOf("Using legacy nbt.display.Name", value.position()));
-            } else if (metadata.startsWith("display.Lore")) {
-                metadata = "minecraft:lore" + value.keyMetadata().substring("display.Lore".length());
-                CITResewn.logWarnLoading(properties.messageWithDescriptorOf("Using legacy nbt.display.Lore", value.position()));
-            } else
-                throw new CITParsingException("NBT condition is not supported since 1.21", properties, value.position());
+            var nbtPath = NBTToComponent.keySet().stream().filter(metadata::startsWith).findFirst();
+            if(metadata.startsWith("ExtraAttributes"))
+            {
+                metadata = "minecraft:custom_data" + metadata.substring("ExtraAttributes".length());
+            }
+            else if(nbtPath.isPresent()) {
+                var component = NBTToComponent.get(nbtPath.get());
+                metadata = component + metadata.substring(nbtPath.get().length());
+            }
+            else
+                throw new CITParsingException("NBT condition: \"" + metadata + "\" is no longer supported", properties, value.position());
         }
 
         metadata = metadata.replace("~", "minecraft:");
@@ -66,11 +158,11 @@ public class ConditionComponents extends CITCondition {
     @Override
     public boolean test(CITContext context) {
         /*?>=1.21 {?*/
-        Object stackComponent = context.stack.getComponents().get(this.componentType);
+        var stackComponent = context.stack.getComponents().get(this.componentType);
+
         if (stackComponent != null) {
-
-
             NbtElement fallbackComponentNBT = ((ComponentType<Object>) this.componentType).getCodec().encodeStart(NbtOps.INSTANCE, stackComponent).getOrThrow();
+
             return this.fallbackNBTCheck.testPath(fallbackComponentNBT, 0, context);
         }
         /*?}?*/
