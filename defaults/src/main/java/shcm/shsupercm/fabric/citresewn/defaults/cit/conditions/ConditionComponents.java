@@ -18,9 +18,7 @@ import shcm.shsupercm.fabric.citresewn.pack.format.PropertyGroup;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyKey;
 import shcm.shsupercm.fabric.citresewn.pack.format.PropertyValue;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
+import java.io.*;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
@@ -68,12 +66,29 @@ public class ConditionComponents extends CITCondition {
             {
                 try {
                     file.getParentFile().mkdirs();
-                    file.createNewFile();
+                    if(!file.createNewFile())
+                    {
+                        CITResewn.logErrorLoading("Failed to create nbttocomponents.properties file");
+                        return;
+                    }
+
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(file, false))) {
+                        writer.write("display.Name,minecraft:custom_name");
+                        writer.newLine();
+                        writer.write("display.Lore,minecraft:custom_lore");
+                        writer.newLine();
+                        writer.write("SkullOwner.Properties.textures.0.Value,minecraft:profile.properties.0.value");
+                        writer.newLine();
+                        writer.write("display.color,minecraft:dyed_color");
+                    }
+                    catch(IOException ex){
+                        ex.printStackTrace();
+                    }
+
                 }
                 catch (Exception e) {
                     e.printStackTrace();
                 }
-                return; // guaranteed to be empty
             }
 
             // create BufferedReader object from the File
